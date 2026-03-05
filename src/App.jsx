@@ -353,15 +353,15 @@ export default function AdminApp() {
             </>}
 
             {page==="orders"&&<div className="card">
-              <div className="ch"><div className="ct">New Orders Requiring Action</div></div>
-              {orders.filter(o=>o.isNew&&o.status==="Confirmed").length===0?<div className="ld">✅ No pending orders right now!</div>:
-              orders.filter(o=>o.isNew&&o.status==="Confirmed").map(o=>(
+              <div className="ch"><div className="ct">Active Orders ({orders.filter(o=>o.status!=="Delivered").length})</div></div>
+              {orders.filter(o=>o.status!=="Delivered").length===0?<div className="ld">✅ No pending orders right now!</div>:
+              [...orders].reverse().filter(o=>o.status!=="Delivered").map(o=>(
                 <div key={o.id} style={{padding:"16px 20px",borderBottom:"1px solid var(--b)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <div style={{fontFamily:"Syne,sans-serif",fontWeight:700}}>{o.id}</div>
-                    <div style={{display:"flex",gap:8}}>
-                      <span className="badge bt">{o.paymentMethod?.toUpperCase()}</span>
-                      <button onClick={()=>markSeen(o.id)} style={{background:"none",border:"none",fontSize:11,color:"var(--m)",cursor:"pointer"}}>Mark seen</button>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                      <span className={`badge ${o.status==="Delivered"?"bg":o.status==="Out for Delivery"?"by":o.status==="Packed"?"bt":"bv"}`}>{o.status}</span>
+                      <span className="badge bt" style={{fontSize:10}}>{o.paymentMethod?.toUpperCase()}</span>
                     </div>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
@@ -389,15 +389,16 @@ export default function AdminApp() {
                       <span>Total</span><span style={{color:"var(--a)"}}>₹{o.total}</span>
                     </div>
                   </div>
-                  <div style={{marginTop:8}}>
-                    <div style={{fontSize:11,color:"var(--m)",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Update Status</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                      {["Confirmed","Packed","Out for Delivery","Delivered"].map(s=>(
-                        <button key={s} onClick={()=>updateStatus(o.id,s)} style={{padding:"9px 8px",borderRadius:10,border:"1px solid",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"DM Sans,sans-serif",transition:"all .2s",
-                          background:o.status===s?"var(--a)":"var(--s)",
+                  <div style={{marginTop:12,background:"var(--s2)",borderRadius:12,padding:12}}>
+                    <div style={{fontSize:11,color:"var(--m)",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>📋 Update Order Status</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      {[{s:"Confirmed",icon:"✅"},{s:"Packed",icon:"📦"},{s:"Out for Delivery",icon:"🚚"},{s:"Delivered",icon:"🎉"}].map(({s,icon})=>(
+                        <button key={s} onClick={async()=>{ await updateStatus(o.id,s); }} style={{padding:"10px 8px",borderRadius:10,border:"2px solid",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"DM Sans,sans-serif",transition:"all .2s",
+                          background:o.status===s?"var(--a)":"transparent",
                           color:o.status===s?"#1a1a2e":"var(--m)",
-                          borderColor:o.status===s?"var(--a)":"var(--b)"}}>
-                          {s==="Confirmed"?"✅ Confirmed":s==="Packed"?"📦 Packed":s==="Out for Delivery"?"🚚 On Way":"🎉 Delivered"}
+                          borderColor:o.status===s?"var(--a)":"var(--b)",
+                          transform:o.status===s?"scale(1.03)":"scale(1)"}}>
+                          {icon} {s}
                         </button>
                       ))}
                     </div>
