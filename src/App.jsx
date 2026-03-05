@@ -103,6 +103,7 @@ export default function AdminApp() {
   const [newP, setNewP] = useState({ name:"", category:"Groceries", price:"", qty:"", inStock:true, desc:"" });
   const prevOrderCount = useRef(0);
   const audioRef = useRef(null);
+  const notifiedIds = useRef(new Set());
 
   const requestNotifPermission = async () => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -152,15 +153,16 @@ export default function AdminApp() {
         fetch(`${API}/stats`).then(r=>r.json()),
       ]);
       setProducts(pr); setStats(st);
-      // Check for NEW orders
+      // Check for NEW orders - only notify once per order ID
       const newOrders = or.filter(o => o.isNew);
-      if (prevOrderCount.current > 0 && newOrders.length > 0) {
-        const newest = newOrders[newOrders.length - 1];
+      const unnotified = newOrders.filter(o => !notifiedIds.current.has(o.id));
+      if (unnotified.length > 0) {
+        const newest = unnotified[unnotified.length - 1];
+        notifiedIds.current.add(newest.id);
         setNotification(newest);
         playSound();
         sendBrowserNotification(newest);
-        // Auto-dismiss after 10 seconds
-        setTimeout(() => setNotification(null), 10000);
+        // Notification stays until admin manually dismisses it
       }
       prevOrderCount.current = or.length;
       setOrders(or);
@@ -214,8 +216,11 @@ export default function AdminApp() {
   };
 
   const updateStatus = async (id, status) => {
-    await fetch(`${API}/orders/${id}/status`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status}) });
-    loadAll();
+    try {
+      const r = await fetch(`${API}/orders/${id}/status`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status}) });
+      if (!r.ok) { alert("Failed to update status. Is backend running?"); return; }
+      await loadAll();
+    } catch(e) { alert("Cannot connect to backend!"); }
   };
 
   const openEdit = (p) => { setEditP(p); setNewP({name:p.name,category:p.category,price:p.price,qty:p.qty,inStock:p.inStock,desc:p.desc||""}); setImgFiles([]); setImgPrevs([]); setKeepImgs(p.images||[]); setModal("prod"); };
@@ -252,6 +257,14 @@ export default function AdminApp() {
     </>
   );
 
+  const goToOrders = async () => {
+    setPage("orders");
+    // Dismiss notification when navigating to orders page
+    if (notification) {
+      await markSeen(notification.id);
+    }
+  };
+
   const NAVS = [
     {id:"dashboard",icon:"📊",label:"Dashboard"},
     {id:"orders",icon:"🚀",label:"New Orders",badge:newOrderCount},
@@ -265,7 +278,7 @@ export default function AdminApp() {
       <style>{CSS}</style>
       <div className="wrap">
         {notification&&<div className="notif-banner">
-          <button className="notif-close" onClick={()=>markSeen(notification.id)}>✕</button>
+          <button className="notif-close" onClick={()=>markSeen(notification.id)} title="Mark as read">✕</button>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
             <span className="new-dot"/>
             <strong style={{fontSize:14,color:"var(--a)"}}>New Order Received!</strong>
@@ -277,8 +290,8 @@ export default function AdminApp() {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
             <strong style={{color:"var(--a)",fontFamily:"Syne,sans-serif"}}>₹{notification.total}</strong>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>markSeen(notification.id)} style={{background:"var(--s2)",color:"var(--m)",border:"1px solid var(--b)",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}}>✓ Mark Read</button>
-              <button onClick={()=>{markSeen(notification.id);setPage("orders");}} style={{background:"var(--a)",color:"#1a1a2e",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>View →</button>
+              <button onClick={()=>markSeen(notification.id)} style={{background:"var(--s2)",color:"var(--m)",border:"1px solid var(--b)",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}}>✓ Mark as Read</button>
+              <button onClick={()=>{markSeen(notification.id);setPage("orders");}} style={{background:"var(--a)",color:"#1a1a2e",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>View Order →</button>
             </div>
           </div>
         </div>}
@@ -289,7 +302,7 @@ export default function AdminApp() {
             <div className="slogo-b">ADMIN PANEL</div>
           </div>
           <div className="snav">
-            {NAVS.map(n=><div key={n.id} className={`ni${page===n.id?" act":""}`} onClick={()=>setPage(n.id)}>
+            {NAVS.map(n=><div key={n.id} className={`ni${page===n.id?" act":""}`} onClick={()=>n.id==="orders"?goToOrders():setPage(n.id)}>
               <span style={{fontSize:16,width:20,textAlign:"center"}}>{n.icon}</span>{n.label}
               {n.badge>0&&<span className="nbdg">{n.badge}</span>}
             </div>)}
@@ -376,10 +389,18 @@ export default function AdminApp() {
                       <span>Total</span><span style={{color:"var(--a)"}}>₹{o.total}</span>
                     </div>
                   </div>
-                  <div style={{display:"flex",gap:8}}>
-                    <select className="osel" value={o.status} onChange={e=>updateStatus(o.id,e.target.value)} style={{flex:1,padding:"9px 12px"}}>
-                      <option>Confirmed</option><option>Packed</option><option>Out for Delivery</option><option>Delivered</option>
-                    </select>
+                  <div style={{marginTop:8}}>
+                    <div style={{fontSize:11,color:"var(--m)",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Update Status</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                      {["Confirmed","Packed","Out for Delivery","Delivered"].map(s=>(
+                        <button key={s} onClick={()=>updateStatus(o.id,s)} style={{padding:"9px 8px",borderRadius:10,border:"1px solid",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"DM Sans,sans-serif",transition:"all .2s",
+                          background:o.status===s?"var(--a)":"var(--s)",
+                          color:o.status===s?"#1a1a2e":"var(--m)",
+                          borderColor:o.status===s?"var(--a)":"var(--b)"}}>
+                          {s==="Confirmed"?"✅ Confirmed":s==="Packed"?"📦 Packed":s==="Out for Delivery"?"🚚 On Way":"🎉 Delivered"}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -427,7 +448,18 @@ export default function AdminApp() {
                   <td style={{fontSize:11,color:"var(--m)",maxWidth:140}}>{o.address?.line1}, {o.address?.city}</td>
                   <td style={{fontSize:11,color:"var(--m)",maxWidth:160}}>{o.items.map(i=>i.name+" x"+i.quantity).join(", ")}</td>
                   <td style={{fontWeight:700}}>₹{o.total}</td>
-                  <td><select className="osel" value={o.status} onChange={e=>updateStatus(o.id,e.target.value)}><option>Confirmed</option><option>Packed</option><option>Out for Delivery</option><option>Delivered</option></select></td>
+                  <td>
+                    <select className="osel" value={o.status} onChange={async e=>{
+                      const newStatus = e.target.value;
+                      await fetch(`${API}/orders/${o.id}/status`, {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:newStatus})});
+                      await loadAll();
+                    }}>
+                      <option>Confirmed</option>
+                      <option>Packed</option>
+                      <option>Out for Delivery</option>
+                      <option>Delivered</option>
+                    </select>
+                  </td>
                 </tr>)}</tbody>
               </table>}
             </div>}
