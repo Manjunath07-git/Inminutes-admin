@@ -369,7 +369,7 @@ export default function AdminApp() {
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <div style={{fontFamily:"Syne,sans-serif",fontWeight:700}}>{o.id}</div>
                     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                      <span className={`badge ${o.status==="Delivered"?"bg":o.status==="Out for Delivery"?"by":o.status==="Packed"?"bt":"bv"}`}>{o.status}</span>
+                      <span className={`badge ${o.status==="Delivered"?"bg":o.status==="Cancelled"?"bd":o.status==="Out for Delivery"?"by":o.status==="Packed"?"bt":"bv"}`}>{o.status}</span>
                       <span className="badge bt" style={{fontSize:10}}>{o.paymentMethod?.toUpperCase()}</span>
                     </div>
                   </div>
@@ -416,6 +416,16 @@ export default function AdminApp() {
                         </button>
                       ))}
                     </div>
+                    {o.status!=="Delivered"&&o.status!=="Cancelled"&&<button
+                      onClick={async()=>{
+                        if(window.confirm("Cancel this order? Stock will be restored.")) {
+                          await updateStatus(o.id,"Cancelled");
+                        }
+                      }}
+                      style={{marginTop:10,width:"100%",padding:"10px",borderRadius:10,border:"2px solid #ff5c5c",background:"rgba(255,92,92,0.08)",color:"#ff5c5c",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"DM Sans,sans-serif"}}>
+                      ❌ Cancel Order
+                    </button>}
+                    {o.status==="Cancelled"&&<div style={{marginTop:10,textAlign:"center",padding:"10px",borderRadius:10,background:"rgba(255,92,92,0.08)",border:"2px solid #ff5c5c",color:"#ff5c5c",fontSize:12,fontWeight:700}}>❌ Order Cancelled</div>}
                   </div>
                 </div>
               ))}
