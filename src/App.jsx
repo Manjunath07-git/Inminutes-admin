@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-const API = "http://localhost:4000";
+const API = "https://inminutes-backend.onrender.com";
 const CATS = ["Groceries","Beauty","Food","Beverages","Snacks","Dairy","Bakery","Other"];
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -174,11 +174,20 @@ export default function AdminApp() {
 
   const doLogin = async () => {
     try {
-      const r = await fetch(`${API}/admins/login`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({email, password:pass}) });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const r = await fetch(`${API}/admins/login`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({email, password:pass}), signal: controller.signal });
+      clearTimeout(timeout);
       const d = await r.json();
       if (!r.ok) { setLoginErr(d.error || "Invalid credentials"); return; }
       setAuth(d);
-    } catch(e) { setLoginErr("Cannot connect to backend!"); }
+    } catch(e) { 
+      if (e.name === 'AbortError') {
+        setLoginErr("Request timed out. Try again.");
+      } else {
+        setLoginErr("Error: " + e.message);
+      }
+    }
   };
 
   const markSeen = async (orderId) => {
@@ -377,6 +386,11 @@ export default function AdminApp() {
                       <div style={{fontSize:12,color:"var(--m)"}}>{o.address?.line1}</div>
                       <div style={{fontSize:12,color:"var(--m)"}}>{o.address?.city} — {o.address?.pincode}</div>
                       {o.address?.phone&&<div style={{fontSize:12,color:"var(--m)"}}>📞 {o.address.phone}</div>}
+                      {o.location&&<a href={`https://www.google.com/maps?q=${o.location.lat},${o.location.lng}`} target="_blank" rel="noreferrer"
+                        style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:8,background:"rgba(66,133,244,0.12)",border:"1px solid rgba(66,133,244,0.3)",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,color:"#4285F4",textDecoration:"none"}}>
+                        🗺️ View on Google Maps
+                      </a>}
+                      {!o.location&&<div style={{fontSize:11,color:"var(--m)",marginTop:6,fontStyle:"italic"}}>📍 No location shared</div>}
                     </div>
                   </div>
                   <div style={{background:"var(--s2)",borderRadius:10,padding:12,marginBottom:10}}>
