@@ -83,7 +83,9 @@ tr:hover td{background:rgba(255,255,255,.012)}
 `;
 
 export default function AdminApp() {
-  const [auth, setAuth] = useState(null);
+  const [auth, setAuth] = useState(()=>{
+    try { const s=localStorage.getItem('inminutes_admin'); return s?JSON.parse(s):null; } catch(e){ return null; }
+  });
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -180,6 +182,7 @@ export default function AdminApp() {
       clearTimeout(timeout);
       const d = await r.json();
       if (!r.ok) { setLoginErr(d.error || "Invalid credentials"); return; }
+      localStorage.setItem('inminutes_admin', JSON.stringify(d));
       setAuth(d);
     } catch(e) { 
       if (e.name === 'AbortError') {
@@ -321,7 +324,7 @@ export default function AdminApp() {
               <div className="av">{auth.name[0]}</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{auth.name}</div>
-                <div style={{fontSize:11,color:"var(--a2)",cursor:"pointer"}} onClick={()=>setAuth(null)}>Logout</div>
+                <div style={{fontSize:11,color:"var(--a2)",cursor:"pointer"}} onClick={()=>{localStorage.removeItem("inminutes_admin");setAuth(null);}}>Logout</div>
               </div>
             </div>
           </div>
@@ -362,9 +365,9 @@ export default function AdminApp() {
             </>}
 
             {page==="orders"&&<div className="card">
-              <div className="ch"><div className="ct">Active Orders ({orders.filter(o=>o.status!=="Delivered").length})</div></div>
-              {orders.filter(o=>o.status!=="Delivered").length===0?<div className="ld">✅ No pending orders right now!</div>:
-              [...orders].reverse().filter(o=>o.status!=="Delivered").map(o=>(
+              <div className="ch"><div className="ct">Active Orders ({orders.filter(o=>o.status!=="Delivered"&&o.status!=="Cancelled").length})</div></div>
+              {orders.filter(o=>o.status!=="Delivered"&&o.status!=="Cancelled").length===0?<div className="ld">✅ No pending orders right now!</div>:
+              [...orders].reverse().filter(o=>o.status!=="Delivered"&&o.status!=="Cancelled").map(o=>(
                 <div key={o.id} style={{padding:"16px 20px",borderBottom:"1px solid var(--b)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <div style={{fontFamily:"Syne,sans-serif",fontWeight:700}}>{o.id}</div>
