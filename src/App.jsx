@@ -97,6 +97,8 @@ export default function AdminApp() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [loginErr, setLoginErr] = useState("");
+  const [sharingLocation, setSharingLocation] = useState(false);
+  const [locationErr, setLocationErr] = useState("");
   const [imgFiles, setImgFiles] = useState([]);
   const [imgPrevs, setImgPrevs] = useState([]);
   const [keepImgs, setKeepImgs] = useState([]);
@@ -145,6 +147,31 @@ export default function AdminApp() {
       });
       n.onclick = () => { window.focus(); n.close(); };
     }
+  };
+
+  const startLocationSharing = () => {
+    if (!navigator.geolocation) { setLocationErr("Geolocation not supported"); return; }
+    setSharingLocation(true);
+    setLocationErr("");
+    const watchId = navigator.geolocation.watchPosition(
+      async (pos) => {
+        try {
+          await fetch(`${API}/admins/${auth.id}/location`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+          });
+        } catch(e) {}
+      },
+      (err) => { setLocationErr("Location error: " + err.message); setSharingLocation(false); },
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+    window._locationWatchId = watchId;
+  };
+
+  const stopLocationSharing = () => {
+    if (window._locationWatchId) navigator.geolocation.clearWatch(window._locationWatchId);
+    setSharingLocation(false);
   };
 
   const loadAll = async () => {
@@ -231,6 +258,22 @@ export default function AdminApp() {
     try {
       const r = await fetch(`${API}/orders/${encodeURIComponent(id)}/status`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status}) });
       if (!r.ok) { alert("Failed to update status. Is backend running?"); return; }
+      await loadAll();
+    } catch(e) { alert("Cannot connect to backend!"); }
+  };
+
+  const claimOrder = async (id) => {
+    try {
+      const r = await fetch(`${API}/orders/${encodeURIComponent(id)}/claim`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ adminId: auth.id, adminName: auth.name }) });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error); return; }
+      await loadAll();
+    } catch(e) { alert("Cannot connect to backend!"); }
+  };
+
+  const unclaimOrder = async (id) => {
+    try {
+      await fetch(`${API}/orders/${encodeURIComponent(id)}/unclaim`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({}) });
       await loadAll();
     } catch(e) { alert("Cannot connect to backend!"); }
   };
@@ -374,8 +417,31 @@ export default function AdminApp() {
                     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                       <span className={`badge ${o.status==="Delivered"?"bg":o.status==="Cancelled"?"bd":o.status==="Out for Delivery"?"by":o.status==="Packed"?"bt":"bv"}`}>{o.status}</span>
                       <span className="badge bt" style={{fontSize:10}}>{o.paymentMethod?.toUpperCase()}</span>
+                      {o.claimedBy&&<span className="badge" style={{background:"#e8f5e9",color:"#2e7d32",fontSize:10}}>✅ {o.claimedByName}</span>}
                     </div>
                   </div>
+                  {/* Claim/Unclaim Banner */}
+                  {!o.claimedBy
+                    ? <div style={{background:"#fff8e1",border:"1px solid #ffe082",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:"#f57f17"}}>🔔 Unassigned Order</div>
+                          <div style={{fontSize:11,color:"#888",marginTop:2}}>Click Accept to take this order</div>
+                        </div>
+                        <button onClick={()=>claimOrder(o.id)} style={{background:"#1DBF73",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>✅ Accept Order</button>
+                      </div>
+                    : o.claimedBy===auth.id
+                      ? <div style={{background:"#e8f5e9",border:"1px solid #a5d6a7",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <div style={{fontSize:12,fontWeight:700,color:"#2e7d32"}}>✅ You accepted this order</div>
+                            <div style={{fontSize:11,color:"#888",marginTop:2}}>You are responsible for this delivery</div>
+                          </div>
+                          <button onClick={()=>unclaimOrder(o.id)} style={{background:"none",color:"#ef5350",border:"1px solid #ef5350",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Release</button>
+                        </div>
+                      : <div style={{background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:10,padding:"10px 14px",marginBottom:10}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#e65100"}}>🔒 Accepted by {o.claimedByName}</div>
+                          <div style={{fontSize:11,color:"#888",marginTop:2}}>This order is being handled. Wait for next order.</div>
+                        </div>
+                  }
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
                     <div style={{background:"var(--s2)",borderRadius:10,padding:12}}>
                       <div style={{fontSize:11,color:"var(--m)",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Customer</div>
@@ -451,7 +517,20 @@ export default function AdminApp() {
             </div>}
 
             {page==="inventory"&&<div className="card">
-              <div className="ch"><div className="ct">Stock Levels</div></div>
+              <div className="ch">
+                <div className="ct">Stock Levels</div>
+                <button onClick={async()=>{
+                  const r = await fetch(`${API}/ping`);
+                  alert("Inventory alert email will be sent to all admins for products with stock below 5!");
+                }} style={{background:"#FF5722",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>⚠️ Send Alert Email</button>
+              </div>
+              {products.filter(p=>p.qty<=5).length>0&&<div style={{background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:10,padding:"12px 16px",margin:"0 0 12px 0",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:20}}>⚠️</span>
+                <div>
+                  <div style={{fontWeight:700,fontSize:13,color:"#e65100"}}>{products.filter(p=>p.qty===0).length} out of stock, {products.filter(p=>p.qty>0&&p.qty<=5).length} low stock</div>
+                  <div style={{fontSize:12,color:"#888",marginTop:2}}>Automatic alert email sent to all admins every 6 hours</div>
+                </div>
+              </div>}
               {products.length===0?<div className="ld">No products</div>:
               <table><thead><tr><th>Product</th><th>Stock Bar</th><th>Units</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody>{[...products].sort((a,b)=>a.qty-b.qty).map(p=><tr key={p.id}>
