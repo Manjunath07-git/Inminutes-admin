@@ -148,7 +148,32 @@ export default function AdminApp() {
   const [auth, setAuth] = useState(()=>{
     try { const s=localStorage.getItem('inminutes_admin'); return s?JSON.parse(s):null; } catch(e){ return null; }
   });
-  const [page, setPage] = useState("dashboard");
+  // --- BROWSER BACK BUTTON FIX ---
+  const [page, setPageInternal] = useState("dashboard");
+
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (e.state && e.state.page) {
+        setPageInternal(e.state.page);
+      } else {
+        setPageInternal("dashboard");
+      }
+    };
+    
+    // Register the first page in the browser's history
+    window.history.replaceState({ page: "dashboard" }, "");
+    window.addEventListener("popstate", handlePopState);
+    
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const setPage = (newPage) => {
+    if (page === newPage) return; // Don't add duplicate history entries
+    window.history.pushState({ page: newPage }, "");
+    setPageInternal(newPage);
+    window.scrollTo(0, 0); // Scroll to top on page change
+  };
+  // -------------------------------
   const [mobMenu, setMobMenu] = useState(false); 
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -247,13 +272,14 @@ export default function AdminApp() {
   const loadAll = async () => {
     try {
       setIsRefreshing(true);
-      const headers = { "Authorization": `Bearer ${auth?.token}` };
+      const headers = { "Authorization": `Bearer ${auth?.token}`, "Cache-Control": "no-cache" };
       const [pr, st] = await Promise.all([
-        fetch(`${API}/products`, { headers }).then(r=>r.json()),
-        fetch(`${API}/stats`, { headers }).then(r=>r.json()),
+        // Added timestamps to bust the cache!
+        fetch(`${API}/products?t=${Date.now()}`, { headers }).then(r=>r.json()),
+        fetch(`${API}/stats?t=${Date.now()}`, { headers }).then(r=>r.json()),
       ]);
       
-      const ordersRes = await fetch(`${API}/orders/paginated?page=${orderPage}&limit=${ORDERS_PER_PAGE}`, { headers });
+      const ordersRes = await fetch(`${API}/orders/paginated?page=${orderPage}&limit=${ORDERS_PER_PAGE}&t=${Date.now()}`, { headers });
       const ordersData = await ordersRes.json();
 
       if(Array.isArray(pr)) setProducts(pr); 
