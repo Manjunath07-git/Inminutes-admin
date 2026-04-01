@@ -173,7 +173,9 @@ export default function AdminApp() {
   const [keepImgs, setKeepImgs] = useState([]);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState(null);
-  const [newP, setNewP] = useState({ name:"", category:"Groceries", price:"", qty:"", inStock:true, desc:"" });
+  
+  // ---> ADDED: unit property to newP <---
+  const [newP, setNewP] = useState({ name:"", category:"Groceries", price:"", qty:"", unit:"", inStock:true, desc:"" });
 
   const audioRef = useRef(null);
   const notifiedIds = useRef(new Set());
@@ -309,9 +311,9 @@ export default function AdminApp() {
   };
 
   // 🚀 DIRECT CLOUDINARY UPLOAD 
-  const saveProd = async () => {
-    if (!newP.name || !newP.price || !newP.qty) { 
-      showToast("Fill Name, Price, Qty", "error"); return; 
+ const saveProd = async () => {
+    if (!newP.name || !newP.price || !newP.qty || !newP.unit) { 
+      showToast("Fill Name, Price, Qty, Unit", "error"); return; 
     }
     setSaving(true);
     
@@ -332,7 +334,9 @@ export default function AdminApp() {
       }
 
       const finalImages = [...keepImgs, ...uploadedUrls];
-      const productData = { ...newP, price: Number(newP.price), qty: Number(newP.qty), images: finalImages };
+      
+      // ONLY the Admin App version goes here:
+      const productData = { ...newP, price: Number(newP.price), unit: Number(newP.unit), qty: newP.qty, images: finalImages };
 
       const url = editP ? `${API}/products/${editP.id}` : `${API}/products`;
       const method = editP ? "PUT" : "POST";
@@ -345,7 +349,7 @@ export default function AdminApp() {
 
       await loadAll();
       setModal(null); 
-      setNewP({ name:"", category:"Groceries", price:"", qty:"", inStock:true, desc:"" });
+      setNewP({ name:"", category:"Groceries", price:"", qty:"", unit:"", inStock:true, desc:"" });
       setImgFiles([]); setImgPrevs([]); setKeepImgs([]); setEditP(null);
       showToast(editP ? "Product updated!" : "Product added!", "success");
     } catch(e) { 
@@ -411,8 +415,9 @@ export default function AdminApp() {
     } catch(e) { showToast("Cannot connect to backend!", "error"); }
   };
 
-  const openEdit = (p) => { setEditP(p); setNewP({name:p.name,category:p.category,price:p.price,qty:p.qty,inStock:p.inStock,desc:p.desc||""}); setImgFiles([]); setImgPrevs([]); setKeepImgs(p.images||[]); setModal("prod"); };
-  const openAdd = () => { setEditP(null); setNewP({name:"",category:"Groceries",price:"",qty:"",inStock:true,desc:""}); setImgFiles([]); setImgPrevs([]); setKeepImgs([]); setModal("prod"); };
+  // ---> ADDED: handle unit property <---
+  const openEdit = (p) => { setEditP(p); setNewP({name:p.name,category:p.category,price:p.price,qty:p.qty,unit:p.unit||"",inStock:p.inStock,desc:p.desc||""}); setImgFiles([]); setImgPrevs([]); setKeepImgs(p.images||[]); setModal("prod"); };
+  const openAdd = () => { setEditP(null); setNewP({name:"",category:"Groceries",price:"",qty:"",unit:"",inStock:true,desc:""}); setImgFiles([]); setImgPrevs([]); setKeepImgs([]); setModal("prod"); };
   
   const activeOrders = orders.filter(o=>o.status!=="Delivered"&&o.status!=="Cancelled");
   const newOrderCount = activeOrders.filter(o=>o.isNew).length;
@@ -707,7 +712,7 @@ export default function AdminApp() {
               {filtered.length===0?<div className="ld">{products.length===0?"No products yet":"No results"}</div>:
               <table><thead><tr><th>Product</th><th>Photos</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>{filtered.map(p=><tr key={p.id}>
-                  <td><div className="pc">{p.images?.[0]?<img src={p.images[0]} className="pth" alt=""/>:<div className="pph">📦</div>}<div><div style={{fontWeight:600}}>{p.name}</div><div style={{fontSize:11,color:"var(--m)"}}>{p.desc?.slice(0,25)||"—"}</div></div></div></td>
+                  <td><div className="pc">{p.images?.[0]?<img src={p.images[0]} className="pth" alt=""/>:<div className="pph">📦</div>}<div><div style={{fontWeight:600}}>{p.name} <span style={{fontSize:11, color:"var(--a)", fontWeight:800}}>{p.unit}</span></div><div style={{fontSize:11,color:"var(--m)"}}>{p.desc?.slice(0,25)||"—"}</div></div></div></td>
                   <td style={{fontSize:12,color:"var(--m)"}}>{(p.images||[]).length} 📷</td>
                   <td style={{fontSize:12}}>{p.category}</td>
                   <td style={{fontFamily:"Syne,sans-serif",fontWeight:700}}>₹{p.price}</td>
@@ -736,7 +741,7 @@ export default function AdminApp() {
               {products.length===0?<div className="ld">No products</div>:
               <table><thead><tr><th>Product</th><th>Stock Bar</th><th>Units</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody>{[...products].sort((a,b)=>a.qty-b.qty).map(p=><tr key={p.id}>
-                  <td style={{fontWeight:600}}>{p.name}</td>
+                  <td style={{fontWeight:600}}>{p.name} <span style={{fontSize:11, color:"var(--a)", fontWeight:800}}>{p.unit}</span></td>
                   <td style={{width:150}}><div style={{height:8,background:"var(--bg)",borderRadius:4,overflow:"hidden",border:"1px solid var(--b)"}}><div style={{width:`${Math.min(100,(p.qty/50)*100)}%`,height:"100%",background:p.qty<=5?"var(--a2)":p.qty<=15?"var(--y)":"var(--g)",borderRadius:4}}></div></div></td>
                   <td style={{fontWeight:800,color:p.qty<=5?"var(--a2)":p.qty<=15?"var(--y)":"var(--g)"}}>{p.qty}</td>
                   <td><span className={`badge ${p.qty===0?"br":p.qty<=5?"by":"bg"}`}>{p.qty===0?"Out":p.qty<=5?"Low":"Good"}</span></td>
@@ -803,19 +808,21 @@ export default function AdminApp() {
           </div>
         </div>
 
+        {/* ---> ADDED: Unit/Weight Input in Product Modal <--- */}
         {modal==="prod"&&<div className="ov" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
           <div className="mt">{editP?"✏️ Edit Product":"➕ Add Product"}</div>
           <div className="fg"><label className="fl">Images (max 5)</label><ImgSection/></div>
-          <div className="fg"><label className="fl">Product Name</label><input className="fi" placeholder="e.g. Fresh Tomatoes 500g" value={newP.name} onChange={e=>setNewP(p=>({...p,name:e.target.value}))}/></div>
+          <div className="fg"><label className="fl">Product Name</label><input className="fi" placeholder="e.g. Fresh Tomatoes" value={newP.name} onChange={e=>setNewP(p=>({...p,name:e.target.value}))}/></div>
           <div className="fg"><label className="fl">Description</label><input className="fi" placeholder="Brief product description..." value={newP.desc} onChange={e=>setNewP(p=>({...p,desc:e.target.value}))}/></div>
           <div className="frow">
             <div className="fg"><label className="fl">Price (₹)</label><input className="fi" type="number" value={newP.price} onChange={e=>setNewP(p=>({...p,price:e.target.value}))}/></div>
-            <div className="fg"><label className="fl">Quantity</label><input className="fi" type="number" value={newP.qty} onChange={e=>setNewP(p=>({...p,qty:e.target.value}))}/></div>
+            <div className="fg"><label className="fl">Stock Qty</label><input className="fi" type="number" value={newP.qty} onChange={e=>setNewP(p=>({...p,qty:e.target.value}))}/></div>
           </div>
           <div className="frow">
             <div className="fg"><label className="fl">Category</label><select className="fsel" value={newP.category} onChange={e=>setNewP(p=>({...p,category:e.target.value}))}>{CATS.map(c=><option key={c}>{c}</option>)}</select></div>
-            <div className="fg"><label className="fl">Status</label><select className="fsel" value={newP.inStock?"y":"n"} onChange={e=>setNewP(p=>({...p,inStock:e.target.value==="y"}))}><option value="y">In Stock</option><option value="n">Out of Stock</option></select></div>
+            <div className="fg"><label className="fl">Unit/Weight</label><input className="fi" placeholder="e.g., 1 Kg, 500g, 1 pc" value={newP.unit} onChange={e=>setNewP(p=>({...p,unit:e.target.value}))}/></div>
           </div>
+          <div className="fg"><label className="fl">Status</label><select className="fsel" value={newP.inStock?"y":"n"} onChange={e=>setNewP(p=>({...p,inStock:e.target.value==="y"}))}><option value="y">In Stock</option><option value="n">Out of Stock</option></select></div>
           <div className="mbtns">
             <button style={{background:"var(--s2)",color:"#F5F5F5",border:"1px solid var(--b)"}} onClick={()=>setModal(null)}>Cancel</button>
             <button style={{background:"var(--a)",color:"#121212",opacity:saving?.6:1}} onClick={saveProd} disabled={saving}>{saving?"Saving...":editP?"Save Changes":"Add Product"}</button>
